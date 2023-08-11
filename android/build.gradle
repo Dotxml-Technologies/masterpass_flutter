@@ -27,7 +27,7 @@ rootProject.allprojects {
 apply plugin: 'com.android.library'
 
 android {
-    compileSdkVersion 31
+    compileSdkVersion 33
 
     defaultConfig {
         minSdkVersion 21
@@ -36,7 +36,7 @@ android {
     lintOptions {
         disable 'InvalidPackage'
     }
-    buildToolsVersion = '30.0.3'
+    buildToolsVersion = '33.0.1'
     compileOptions {
         sourceCompatibility = '1.8'
         targetCompatibility = '1.8'
