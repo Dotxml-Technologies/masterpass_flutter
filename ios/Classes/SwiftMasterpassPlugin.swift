@@ -30,39 +30,13 @@ public class SwiftMasterpassPlugin: NSObject, FlutterPlugin {
     }
     
     /// Perform the masterpass checkout with the given transaction code, system , and api key.
-    // public func checkout(code: String, amount: String, system: String, key: String, flutterResult: @escaping FlutterResult) {
-    //     let masterpass = MPMasterPass();
-    //     let masterpassDelegate = MasterpassDelegate(flutterResult: flutterResult);
-    //     var masterpassSystem: MPSystem;
-    //     system == "Live" ? (masterpassSystem = MPSystem.live) : (masterpassSystem = MPSystem.test);
-    //     masterpass.checkout(withCode: code, amount: amount, apiKey: key, system: masterpassSystem, controller: UIApplication.shared.delegate?.window??.rootViewController, delegate: masterpassDelegate)
-    // }
-    public func checkout(code: String, amount: Double, system: String, key: String, flutterResult: @escaping FlutterResult) {
-    let masterpass = MPMasterPass()
-    let masterpassDelegate = MasterpassDelegate(flutterResult: flutterResult)
-    var masterpassSystem: MPSystem
-    system == "Live" ? (masterpassSystem = MPSystem.live) : (masterpassSystem = MPSystem.test)
-    
-    // Convert String "amount" to Double
-    guard let amountDouble = Double(amount) else {
-        flutterResult(FlutterError(
-            code: "INVALID_AMOUNT",
-            message: "Amount must be a valid number (e.g., '10.99')",
-            details: nil
-        ))
-        return
+    public func checkout(code: String, amount: String, system: String, key: String, flutterResult: @escaping FlutterResult) {
+        let masterpass = MPMasterPass();
+        let masterpassDelegate = MasterpassDelegate(flutterResult: flutterResult);
+        var masterpassSystem: MPSystem;
+        system == "Live" ? (masterpassSystem = MPSystem.live) : (masterpassSystem = MPSystem.test);
+        masterpass.checkout(withCode: code, amount: amount, apiKey: key, system: masterpassSystem, controller: UIApplication.shared.delegate?.window??.rootViewController, delegate: masterpassDelegate)
     }
-    
-    // Pass the Double value
-    masterpass.checkout(
-        withCode: code,
-        amount: amountDouble,
-        apiKey: key,
-        system: masterpassSystem,
-        controller: UIApplication.shared.delegate?.window??.rootViewController,
-        delegate: masterpassDelegate
-    )
-}
 }
 
 /// Class to handle the result when masterpass payments are completed. In our case,
