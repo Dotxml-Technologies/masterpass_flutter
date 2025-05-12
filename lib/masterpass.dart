@@ -33,7 +33,7 @@ class Masterpass {
   /// 2. The backend system will call the masterpass API to get the transaction code
   /// 3. The backend system will respond to the app with the transaction code that
   /// can be used for the [checkout] method.
-  Future<CheckoutResult> checkout(String txnCode, String amount) async {
+  Future<CheckoutResult> checkout(String txnCode, double amount) async {
     final paymentResultHashMap = await _channel.invokeMethod(
       'checkout',
       <String, dynamic>{"code": txnCode,"amount":amount, "system": _system, "key": _key},
