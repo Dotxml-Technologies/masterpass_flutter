@@ -21,14 +21,14 @@ public class SwiftMasterpassPlugin: NSObject, FlutterPlugin {
                 return
             }
             
+            // Convert String to Double
             guard let amount = Double(amountString) else {
-                result(FlutterError(code: "INVALID_AMOUNT", message: "Amount must be a valid number", details: nil))
+                result(FlutterError(code: "INVALID_AMOUNT", message: "Amount must be a valid number (e.g., '100.0')", details: nil))
                 return
             }
             
             let masterpassSystem: MPSystem = (system == "Live") ? .live : .test
             
-            // Perform checkout in background thread
             DispatchQueue.global(qos: .userInitiated).async { [weak self] in
                 self?.checkout(code: code, amount: amount, system: masterpassSystem, key: key, flutterResult: result)
             }
@@ -43,13 +43,14 @@ public class SwiftMasterpassPlugin: NSObject, FlutterPlugin {
         
         DispatchQueue.main.async {
             guard let rootViewController = UIApplication.shared.delegate?.window??.rootViewController else {
-                flutterResult(FlutterError(code: "NO_ROOT_VC", message: "Failed to get root view controller", details: nil))
+                flutterResult(FlutterError(code: "NO_ROOT_VC", message: "Root view controller not found", details: nil))
                 return
             }
             
+            // ✅ Pass amount as Double
             masterpass.checkout(
                 withCode: code,
-                amount: amount,
+                amount: amount, // Now a Double
                 apiKey: key,
                 system: system,
                 controller: rootViewController,
@@ -59,7 +60,7 @@ public class SwiftMasterpassPlugin: NSObject, FlutterPlugin {
     }
 }
 
-// MARK: - Masterpass Delegate with Enhanced Error Logging
+// MARK: - Masterpass Delegate
 class MasterpassDelegate: UIViewController, MPMasterPassDelegate {
     private var flutterResult: FlutterResult
     
@@ -72,7 +73,6 @@ class MasterpassDelegate: UIViewController, MPMasterPassDelegate {
         fatalError("init(coder:) is not supported")
     }
     
-    // MARK: - Error Handling Improvements
     func masterpassError(_ masterpassError: MPError) {
         let errorMessage: String
         switch masterpassError {
@@ -90,7 +90,6 @@ class MasterpassDelegate: UIViewController, MPMasterPassDelegate {
         sendResult(checkoutResult)
     }
     
-    // MARK: - Delegate Methods
     func masterpassPaymentSucceeded(withTransactionReference transactionReference: String!) {
         sendResult(CheckoutResult(code: "PAYMENT_SUCCEEDED", reference: transactionReference))
     }
@@ -103,7 +102,6 @@ class MasterpassDelegate: UIViewController, MPMasterPassDelegate {
         sendResult(CheckoutResult(code: "USER_CANCELLED", reference: "no_ref"))
     }
     
-    // MARK: - Helper
     private func sendResult(_ result: CheckoutResult) {
         DispatchQueue.main.async {
             self.flutterResult(result.dictionaryRepresentation)
