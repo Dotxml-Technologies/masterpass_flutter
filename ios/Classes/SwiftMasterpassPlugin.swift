@@ -30,7 +30,7 @@ public class SwiftMasterpassPlugin: NSObject, FlutterPlugin {
     }
     
     /// Perform the masterpass checkout with the given transaction code, system , and api key.
-    public func checkout(code: String, amount: String, system: String, key: String, flutterResult: @escaping FlutterResult) {
+    public func checkout(code: String, amount: Double, system: String, key: String, flutterResult: @escaping FlutterResult) {
         let masterpass = MPMasterPass();
         let masterpassDelegate = MasterpassDelegate(flutterResult: flutterResult);
         var masterpassSystem: MPSystem;
