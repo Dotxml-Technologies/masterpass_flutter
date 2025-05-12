@@ -110,7 +110,7 @@ class CheckoutResult {
     
     /// Constructor
     init(code: String, reference: String) {
-        self.code = code;
+        self.code = code; 
         self.reference = reference;
     }
     
