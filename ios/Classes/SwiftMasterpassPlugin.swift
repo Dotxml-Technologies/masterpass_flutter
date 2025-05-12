@@ -3,119 +3,125 @@ import UIKit
 import MasterPassKit
 
 public class SwiftMasterpassPlugin: NSObject, FlutterPlugin {
-    /// Plugin registration
+    
     public static func register(with registrar: FlutterPluginRegistrar) {
         let channel = FlutterMethodChannel(name: "masterpass", binaryMessenger: registrar.messenger())
         let instance = SwiftMasterpassPlugin()
         registrar.addMethodCallDelegate(instance, channel: channel)
     }
     
-    /// Handle method calls from flutter. Currently only necessary to handle the checkout method call,
-    /// which must pass string values for the "code", "system", and "key" keys in arguments. These values should
-    /// represent:
-    /// - "code": the transaction code
-    /// - "system": "Live" or "Test"
-    /// - "key": the masterpass api key
     public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
         if call.method == "checkout" {
-            let arguments = call.arguments as! NSDictionary
-            let code = arguments["code"] as! String
-            let system = arguments["system"] as! String
-            let key = arguments["key"] as! String
-            let amount = arguments["amount"] as! String
-            checkout(code: code, amount:amount, system: system, key: key, flutterResult: result)
+            guard let arguments = call.arguments as? [String: Any],
+                  let code = arguments["code"] as? String,
+                  let system = arguments["system"] as? String,
+                  let key = arguments["key"] as? String,
+                  let amountString = arguments["amount"] as? String else {
+                result(FlutterError(code: "INVALID_ARGUMENTS", message: "Missing or invalid parameters", details: nil))
+                return
+            }
+            
+            guard let amount = Double(amountString) else {
+                result(FlutterError(code: "INVALID_AMOUNT", message: "Amount must be a valid number", details: nil))
+                return
+            }
+            
+            let masterpassSystem: MPSystem = (system == "Live") ? .live : .test
+            
+            // Perform checkout in background thread
+            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+                self?.checkout(code: code, amount: amount, system: masterpassSystem, key: key, flutterResult: result)
+            }
         } else {
-            result("Flutter method not implemented on iOS")
+            result(FlutterMethodNotImplemented)
         }
     }
     
-    /// Perform the masterpass checkout with the given transaction code, system , and api key.
-    public func checkout(code: String, amount: String, system: String, key: String, flutterResult: @escaping FlutterResult) {
-        let masterpass = MPMasterPass();
-        let masterpassDelegate = MasterpassDelegate(flutterResult: flutterResult);
-        var masterpassSystem: MPSystem;
-        system == "Live" ? (masterpassSystem = MPSystem.live) : (masterpassSystem = MPSystem.test);
-        masterpass.checkout(withCode: code, amount: amount, apiKey: key, system: masterpassSystem, controller: UIApplication.shared.delegate?.window??.rootViewController, delegate: masterpassDelegate)
+    private func checkout(code: String, amount: Double, system: MPSystem, key: String, flutterResult: @escaping FlutterResult) {
+        let masterpass = MPMasterPass()
+        let masterpassDelegate = MasterpassDelegate(flutterResult: flutterResult)
+        
+        DispatchQueue.main.async {
+            guard let rootViewController = UIApplication.shared.delegate?.window??.rootViewController else {
+                flutterResult(FlutterError(code: "NO_ROOT_VC", message: "Failed to get root view controller", details: nil))
+                return
+            }
+            
+            masterpass.checkout(
+                withCode: code,
+                amount: amount,
+                apiKey: key,
+                system: system,
+                controller: rootViewController,
+                delegate: masterpassDelegate
+            )
+        }
     }
 }
 
-/// Class to handle the result when masterpass payments are completed. In our case,
-/// a string should always be returned to flutter using an instance of FlutterResult.
+// MARK: - Masterpass Delegate with Enhanced Error Logging
 class MasterpassDelegate: UIViewController, MPMasterPassDelegate {
-    /// the FlutterResult instance to use for returning results back to flutter.
-    var flutterResult: FlutterResult
-
-    func masterpassUserCompletedWallet() {
-        let checkoutResult = CheckoutResult(code: "PAYMENT_SUCCEEDED", reference: "Transaction completed")
-        flutterResult(checkoutResult.dictionaryRepresentation)
-      }
+    private var flutterResult: FlutterResult
     
-    /// Constructor used to initialize flutterResult.
     init(flutterResult: @escaping FlutterResult) {
         self.flutterResult = flutterResult
         super.init(nibName: nil, bundle: nil)
     }
     
-    /// Not supported but needs to be overridden when extending UIViewController.
-    required init?(coder aDecoder: NSCoder) {
+    required init?(coder: NSCoder) {
         fatalError("init(coder:) is not supported")
     }
     
-    /// Return "PAYMENT_SUCCEEDED" when the payment completed successfully.
-    func masterpassPaymentSucceeded(withTransactionReference transactionReference: String!) {
-        let checkoutResult = CheckoutResult(code: "PAYMENT_SUCCEEDED", reference: transactionReference)
-        flutterResult(checkoutResult.dictionaryRepresentation)
-    }
-    
-    /// Return "PAYMENT_FAILED" when the payment completed unsuccessfully.
-    func masterpassPaymentFailed(withTransactionReference transactionReference: String!) {
-        let checkoutResult = CheckoutResult(code: "PAYMENT_FAILED", reference: transactionReference)
-        flutterResult(checkoutResult.dictionaryRepresentation)
-    }
-    
-    /// Return "USER_REGISTERED" if a user has been registered. User registraion is not currently used
-    /// but this method must be overridden when extending MPMasterPassDelegate
-    func masterpassUserRegistered() {
-        let checkoutResult = CheckoutResult(code: "USER_REGISTERED", reference: "no ref. for this result")
-        flutterResult(checkoutResult.dictionaryRepresentation)
-    }
-    
-    /// Return "INVALID_CODE" the transaction code was invalid.
-    func masterpassInvalidCode() {
-        let checkoutResult = CheckoutResult(code: "INVALID_CODE", reference: "no ref. for this result")
-        flutterResult(checkoutResult.dictionaryRepresentation)
-    }
-    
-    /// Return "OUT_ERROR_CODE" when an error has occurred before the payment.
+    // MARK: - Error Handling Improvements
     func masterpassError(_ masterpassError: MPError) {
-        let checkoutResult = CheckoutResult(code: "OUT_ERROR_CODE", reference: "no ref. for this result")
-        flutterResult(checkoutResult.dictionaryRepresentation)
+        let errorMessage: String
+        switch masterpassError {
+        case .MPErrorNetworkError:
+            errorMessage = "NETWORK_ERROR"
+        case .MPErrorPaymentError:
+            errorMessage = "PAYMENT_ERROR"
+        case .MPErrorOTPError:
+            errorMessage = "OTP_ERROR"
+        default:
+            errorMessage = "UNKNOWN_ERROR (\(masterpassError.rawValue))"
+        }
+        
+        let checkoutResult = CheckoutResult(code: errorMessage, reference: "Error code: \(masterpassError.rawValue)")
+        sendResult(checkoutResult)
     }
     
-    /// Return "USER_CANCELLED" when the user cancelled the payment.
+    // MARK: - Delegate Methods
+    func masterpassPaymentSucceeded(withTransactionReference transactionReference: String!) {
+        sendResult(CheckoutResult(code: "PAYMENT_SUCCEEDED", reference: transactionReference))
+    }
+    
+    func masterpassPaymentFailed(withTransactionReference transactionReference: String!) {
+        sendResult(CheckoutResult(code: "PAYMENT_FAILED", reference: transactionReference))
+    }
+    
     func masterpassUserDidCancel() {
-        let checkoutResult = CheckoutResult(code: "USER_CANCELLED", reference: "no ref. for this result")
-        flutterResult(checkoutResult.dictionaryRepresentation)
+        sendResult(CheckoutResult(code: "USER_CANCELLED", reference: "no_ref"))
+    }
+    
+    // MARK: - Helper
+    private func sendResult(_ result: CheckoutResult) {
+        DispatchQueue.main.async {
+            self.flutterResult(result.dictionaryRepresentation)
+        }
     }
 }
 
-/// Used to model a result returned by masterpass. An instance of this class's dictionary representation
-/// is returned to the flutter plugin.
+// MARK: - Checkout Result Model
 class CheckoutResult {
-    /// The result code for the masterpass transaction
     var code: String
-    
-    /// The reference for the result
     var reference: String
     
-    /// Constructor
     init(code: String, reference: String) {
-        self.code = code;
-        self.reference = reference;
+        self.code = code
+        self.reference = reference
     }
     
-    /// The dictionary representation of this class
-    var dictionaryRepresentation : [String:String] {
-        return ["code" : self.code,  "reference" : self.reference]
+    var dictionaryRepresentation: [String: String] {
+        return ["code": code, "reference": reference]
     }
 }
